@@ -20,5 +20,9 @@
 
 ## Next
 
+- [ ] Persistence across restarts
+
+## Next
+
 - [ ] Image and video thumbnails
 - [ ] Embed images, videos, PDFs
