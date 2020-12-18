@@ -5,12 +5,12 @@ import (
 	"path"
 	"strings"
 
-	"github.com/AlbinoDrought/creamy-stuff/stuff"
+	"github.com/AlbinoDrought/creamy-inbound-stuff/stuff"
 )
 
 type ChallengeURLGenerator interface {
 	ViewChallenge(challenge *stuff.Challenge) string
-	ViewChallengePath(challenge *stuff.Challenge, filePath string) string
+	UploadToChallenge(challenge *stuff.Challenge) string
 }
 
 type BrowseURLGenerator interface {
@@ -25,13 +25,13 @@ func aftermarketEscape(url string) string {
 type hardcodedURLGenerator struct{}
 
 func (generator *hardcodedURLGenerator) ViewChallenge(challenge *stuff.Challenge) string {
-	challengeURL := url.URL{Path: "/view/" + challenge.ID}
+	challengeURL := url.URL{Path: "/upload/" + challenge.ID}
 	return aftermarketEscape(challengeURL.String())
 }
 
-func (generator *hardcodedURLGenerator) ViewChallengePath(challenge *stuff.Challenge, filePath string) string {
-	browseURL := url.URL{Path: "/view/" + challenge.ID + "/" + path.Clean(filePath)}
-	return aftermarketEscape(browseURL.String())
+func (generator *hardcodedURLGenerator) UploadToChallenge(challenge *stuff.Challenge) string {
+	challengeURL := url.URL{Path: "/upload/" + challenge.ID + "/file"}
+	return aftermarketEscape(challengeURL.String())
 }
 
 func (generator *hardcodedURLGenerator) BrowsePath(filePath string) string {

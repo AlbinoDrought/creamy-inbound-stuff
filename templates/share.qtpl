@@ -1,4 +1,4 @@
-{% import "github.com/AlbinoDrought/creamy-stuff/stuff" %}
+{% import "github.com/AlbinoDrought/creamy-inbound-stuff/stuff" %}
 
 {% code
 type SharePage struct {

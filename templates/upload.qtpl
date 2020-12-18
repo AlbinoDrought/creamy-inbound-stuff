@@ -1,0 +1,29 @@
+{% import "github.com/AlbinoDrought/creamy-inbound-stuff/stuff" %}
+
+{% code
+type UploadPage struct {
+  Challenge *stuff.Challenge
+  CSRF string
+
+  UploadURL string
+}
+%}
+
+{% func (p *UploadPage) Title() %}
+	Upload
+{% endfunc %}
+
+{% func (p *UploadPage) Body() %}
+  <form method="POST" action="{%s p.UploadURL %}" enctype="multipart/form-data">
+    <input type="hidden" name="_token" value="{%s p.CSRF %}">
+
+    <div>
+      <label for="file">File</label>
+      <input type="file" name="file">
+    </div>
+
+    <div>
+      <button type="submit">Submit</button>
+    </div>
+  </form>
+{% endfunc %}

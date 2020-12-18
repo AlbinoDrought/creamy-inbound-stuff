@@ -5,15 +5,17 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"path"
 	"sort"
 	"strconv"
 	"time"
 
-	"github.com/AlbinoDrought/creamy-stuff/stuff"
-	"github.com/AlbinoDrought/creamy-stuff/templates"
+	"github.com/AlbinoDrought/creamy-inbound-stuff/stuff"
+	"github.com/AlbinoDrought/creamy-inbound-stuff/templates"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -29,62 +31,32 @@ var browseURLGenerator BrowseURLGenerator
 func init() {
 	challengeRepository = stuff.NewArrayChallengeRepository()
 
-	challengeRepository.Set(&stuff.Challenge{
-		ID:         "foo",
-		Public:     true,
-		SharedPath: "data",
-	})
-
-	barChallenge := &stuff.Challenge{
-		ID:         "bar",
-		Public:     false,
-		SharedPath: "data-private",
-	}
-	barChallenge.SetPassword("foo")
-	challengeRepository.Set(barChallenge)
-
-	foobarChallenge := &stuff.Challenge{
-		ID:         "foobar",
-		Public:     true,
-		SharedPath: "data",
-	}
-	foobarChallenge.SetExpirationDate(time.Now().Add(1 * time.Minute))
-	challengeRepository.Set(foobarChallenge)
-
-	floofChallenge := &stuff.Challenge{
-		ID:         "floof",
-		Public:     true,
-		SharedPath: "data",
-	}
-	floofChallenge.SetMaxViewCount(2)
-	challengeRepository.Set(floofChallenge)
-
 	urlGenerator := &hardcodedURLGenerator{}
 	challengeURLGenerator = urlGenerator
 	browseURLGenerator = urlGenerator
 }
 
-func writeErrorPage(w http.ResponseWriter, page *templates.ErrorPage) {
+func writeMessagePage(w http.ResponseWriter, page *templates.MessagePage) {
 	w.WriteHeader(page.Status)
 	templates.WritePageTemplate(w, page, &templates.EmptyNav{})
 }
 
 func renderServerError(w http.ResponseWriter, r *http.Request, err error) {
-	writeErrorPage(w, &templates.ErrorPage{
+	writeMessagePage(w, &templates.MessagePage{
 		Status: http.StatusInternalServerError,
 		Text:   "Internal Server Error",
 	})
 }
 
 func renderUnauthorized(w http.ResponseWriter, r *http.Request) {
-	writeErrorPage(w, &templates.ErrorPage{
+	writeMessagePage(w, &templates.MessagePage{
 		Status: http.StatusUnauthorized,
 		Text:   "Unauthorized",
 	})
 }
 
 func renderChallengeNotFound(w http.ResponseWriter, r *http.Request, ID string) {
-	writeErrorPage(w, &templates.ErrorPage{
+	writeMessagePage(w, &templates.MessagePage{
 		Status: http.StatusNotFound,
 		Text:   "Challenge not found",
 	})
@@ -309,9 +281,8 @@ func handleStuffReceiveForm(w http.ResponseWriter, r *http.Request, ps httproute
 	templates.WritePageTemplate(w, sharedChallengePage, &templates.PrivateNav{})
 }
 
-func handleChallengeFilepath(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func handleChallengeShowForm(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	challengeID := ps.ByName("challenge")
-	filePath := path.Clean(ps.ByName("filepath"))
 
 	challenge := challengeRepository.Get(challengeID)
 	if challenge == nil {
@@ -319,15 +290,15 @@ func handleChallengeFilepath(w http.ResponseWriter, r *http.Request, ps httprout
 		return
 	}
 
+	csrfToken, err := getOrCreateCSRF(w, r)
+	if err != nil {
+		log.Printf("Error with getOrCreateCSRF: %v", err)
+		renderServerError(w, r, err)
+		return
+	}
+
 	if !challenge.Accessible(r) {
 		if challenge.HasPassword {
-			csrfToken, err := getOrCreateCSRF(w, r)
-			if err != nil {
-				log.Printf("Error with getOrCreateCSRF: %v", err)
-				renderServerError(w, r, err)
-				return
-			}
-
 			w.WriteHeader(http.StatusUnauthorized)
 			templates.WritePageTemplate(w, &templates.UnlockPage{
 				Challenge: challenge,
@@ -340,73 +311,17 @@ func handleChallengeFilepath(w http.ResponseWriter, r *http.Request, ps httprout
 		return
 	}
 
-	challengeBasePath := path.Join(dataDirectory, path.Clean(challenge.SharedPath))
-	dir := http.Dir(challengeBasePath)
-	file, err := dir.Open(filePath)
-	if err != nil {
-		log.Printf("Error opening file %v: %v", filePath, err)
-		renderServerError(w, r, err)
-		return
+	uploadPage := &templates.UploadPage{
+		Challenge: challenge,
+		CSRF:      csrfToken,
+
+		UploadURL: challengeURLGenerator.UploadToChallenge(challenge),
 	}
-
-	stat, err := file.Stat()
-	if err != nil {
-		log.Printf("Error stat'ing file %v: %v", filePath, err)
-		renderServerError(w, r, err)
-		return
-	}
-
-	if !stat.IsDir() {
-		challengeRepository.ReportChallengeView(challenge, filePath, r)
-		if challenge.HasViewCountLimit {
-			// some types of files can trigger many requests when displayed inline (streaming media).
-			// when a view count limit is enabled, serve the file as an attachment to bypass this.
-			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", stat.Name()))
-		} else {
-			w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", stat.Name()))
-		}
-		http.ServeFile(w, r, path.Join(challengeBasePath, filePath))
-		return
-	}
-
-	dirs, err := file.Readdir(-1)
-	if err != nil {
-		log.Printf("Error reading directory %v: %v", filePath, err)
-		renderServerError(w, r, err)
-		return
-	}
-	sort.Slice(dirs, func(i, j int) bool { return dirs[i].Name() < dirs[j].Name() })
-
-	files := make([]templates.File, len(dirs))
-	for i, dir := range dirs {
-		name := dir.Name()
-		if dir.IsDir() {
-			name += "/"
-		}
-
-		files[i].Label = name
-		files[i].BrowseLink = challengeURLGenerator.ViewChallengePath(challenge, path.Join(filePath, name))
-	}
-
-	atRoot := filePath == "" || filePath == "/" || filePath == "."
-	directoryName := filePath
-	if atRoot {
-		directoryName = "/"
-	}
-
-	browsePage := &templates.BrowsePage{
-		DirectoryName: directoryName,
-		Files:         files,
-
-		CanTravelUpwards: !atRoot,
-		UpwardsLink:      challengeURLGenerator.ViewChallengePath(challenge, path.Join(filePath, "..")),
-	}
-	templates.WritePageTemplate(w, browsePage, &templates.EmptyNav{})
+	templates.WritePageTemplate(w, uploadPage, &templates.EmptyNav{})
 }
 
-func handleChallengeAuthentication(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func handleChallengeAuth(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	challengeID := ps.ByName("challenge")
-	filePath := ps.ByName("filepath")
 
 	challenge := challengeRepository.Get(challengeID)
 	if challenge == nil {
@@ -416,7 +331,7 @@ func handleChallengeAuthentication(w http.ResponseWriter, r *http.Request, ps ht
 
 	// already has access, no need for auth
 	if challenge.Accessible(r) {
-		http.Redirect(w, r, challengeURLGenerator.ViewChallengePath(challenge, filePath), http.StatusFound)
+		http.Redirect(w, r, challengeURLGenerator.UploadToChallenge(challenge), http.StatusFound)
 		return
 	}
 
@@ -435,7 +350,72 @@ func handleChallengeAuthentication(w http.ResponseWriter, r *http.Request, ps ht
 		}
 	}
 
-	handleChallengeFilepath(w, r, ps)
+	handleChallengeShowForm(w, r, ps)
+}
+
+func handleChallengeUpload(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	challengeID := ps.ByName("challenge")
+
+	challenge := challengeRepository.Get(challengeID)
+	if challenge == nil {
+		renderChallengeNotFound(w, r, challengeID)
+		return
+	}
+
+	if !challenge.Accessible(r) {
+		handleChallengeShowForm(w, r, ps)
+		return
+	}
+
+	if err := validCSRF(r, r.FormValue("_token")); err != nil {
+		log.Printf("Error validating CSRF token: %v", err)
+		renderServerError(w, r, err)
+		return
+	}
+
+	inputFile, fileHeader, err := r.FormFile("file")
+	if err != nil {
+		log.Printf("Error grabbing FormFile: %v", err)
+		renderServerError(w, r, err)
+		return
+	}
+	defer inputFile.Close()
+
+	var filename string
+	if fileHeader == nil {
+		filename = "file.bin"
+	} else {
+		filename = fileHeader.Filename
+	}
+
+	filePath := path.Join(dataDirectory, path.Clean(challenge.SharedPath), path.Clean(path.Base(filename)))
+
+	outputFile, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, os.ModePerm)
+	if err != nil {
+		if os.IsExist(err) {
+			log.Printf("Filepath conflict when trying to open %v: %v", filePath, err)
+			writeMessagePage(w, &templates.MessagePage{
+				Status: http.StatusConflict,
+				Text:   "A file with the same name already exists",
+			})
+		} else {
+			log.Printf("Error creating output file %v: %v", filePath, err)
+			renderServerError(w, r, err)
+		}
+		return
+	}
+	defer outputFile.Close()
+
+	if _, err = io.Copy(outputFile, inputFile); err != nil {
+		log.Printf("Error copying to output file %v: %v", filePath, err)
+		renderServerError(w, r, err)
+		return
+	}
+
+	writeMessagePage(w, &templates.MessagePage{
+		Status: http.StatusOK,
+		Text:   "File uploaded!",
+	})
 }
 
 func handleHome(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -446,14 +426,14 @@ func main() {
 	router := httprouter.New()
 
 	router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeErrorPage(w, &templates.ErrorPage{
+		writeMessagePage(w, &templates.MessagePage{
 			Status: http.StatusNotFound,
 			Text:   "Page Not Found",
 		})
 	})
 
 	router.MethodNotAllowed = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeErrorPage(w, &templates.ErrorPage{
+		writeMessagePage(w, &templates.MessagePage{
 			Status: http.StatusMethodNotAllowed,
 			Text:   "Method Not Allowed",
 		})
@@ -469,10 +449,9 @@ func main() {
 	router.GET("/stuff/share/*filepath", handleStuffShowForm)
 	router.POST("/stuff/share/*filepath", handleStuffReceiveForm)
 
-	router.GET("/view/:challenge", handleChallengeFilepath)
-	router.GET("/view/:challenge/*filepath", handleChallengeFilepath)
-	router.POST("/view/:challenge", handleChallengeAuthentication)
-	router.POST("/view/:challenge/*filepath", handleChallengeAuthentication)
+	router.GET("/upload/:challenge", handleChallengeShowForm)
+	router.POST("/upload/:challenge", handleChallengeAuth)
+	router.POST("/upload/:challenge/file", handleChallengeUpload)
 
 	log.Fatal(http.ListenAndServe(":8080", router))
 }

@@ -12,7 +12,7 @@ build: generate deps
 	go build
 
 run: build
-	./creamy-stuff
+	./creamy-inbound-stuff
 
 install: generate deps
 	go install
@@ -25,4 +25,4 @@ clean:
 	go clean -x
 
 image:
-	docker build -t albinodrought/creamy-stuff .
+	docker build -t albinodrought/creamy-inbound-stuff .
