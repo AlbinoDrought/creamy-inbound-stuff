@@ -1,5 +1,3 @@
-github.com/AlbinoDrought/creamy-stuff v0.0.2 h1:EJhQHimJHXWQngy+k6VmqJ4Ov+V/SXewBe6AULb4sXk=
-github.com/AlbinoDrought/creamy-stuff v0.0.2/go.mod h1:gT0f/VpT1/WhMbaxlEVX/RjA0ZPm0sKma1xbt13BuGk=
 github.com/andybalholm/brotli v1.0.0/go.mod h1:loMXtMfwqflxFJPmdbJO0a3KNoPuLBgiu3qAvBg8x/Y=
 github.com/julienschmidt/httprouter v1.3.0 h1:U0609e9tgbseu3rBINet9P48AI/D3oJs4dN7jwJOQ1U=
 github.com/julienschmidt/httprouter v1.3.0/go.mod h1:JR6WtHb+2LUe8TCKY3cZOxFyyO8IZAc4RVcycCCAKdM=
