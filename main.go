@@ -261,14 +261,14 @@ func handleStuffReceiveForm(w http.ResponseWriter, r *http.Request, ps httproute
 
 		challenge.SetExpirationDate(parsedExpirationTime)
 	}
-	if maxViewCountEnabled := r.FormValue("max-view-count-enabled"); maxViewCountEnabled == "1" {
-		maxViewCount, err := strconv.Atoi(r.FormValue("max-view-count"))
+	if maxUploadCountEnabled := r.FormValue("max-upload-count-enabled"); maxUploadCountEnabled == "1" {
+		maxUploadCount, err := strconv.Atoi(r.FormValue("max-upload-count"))
 		if err != nil {
-			log.Printf("Error converting max view count %s to int: %v", r.FormValue("max-view-count"), err)
+			log.Printf("Error converting max upload count %s to int: %v", r.FormValue("max-upload-count"), err)
 			renderServerError(w, r, err)
 			return
 		}
-		challenge.SetMaxViewCount(maxViewCount)
+		challenge.SetMaxUploadCount(maxUploadCount)
 	}
 
 	challengeRepository.Set(challenge)

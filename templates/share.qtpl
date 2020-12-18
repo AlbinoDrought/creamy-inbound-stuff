@@ -50,17 +50,17 @@ type SharePage struct {
     
     <fieldset>
       <div>
-        <label for="max-view-count-enabled">
-          <input type="checkbox" name="max-view-count-enabled" value="1">
-          Max View Count Enabled
+        <label for="max-upload-count-enabled">
+          <input type="checkbox" name="max-upload-count-enabled" value="1">
+          Max Upload Count Enabled
         </label>
       </div>
 
       <div>
-        <label for="max-view-count">
-          Max View Count
+        <label for="max-upload-count">
+          Max Upload Count
         </label>
-        <input type="number" name="max-view-count" value="1">
+        <input type="number" name="max-upload-count" value="1">
       </div>
     </fieldset>
 

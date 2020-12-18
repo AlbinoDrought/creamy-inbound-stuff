@@ -19,24 +19,24 @@ type Challenge struct {
 	Expires    bool
 	ValidUntil time.Time
 
-	HasViewCountLimit bool
-	MaxViewCount      int
-	ViewCount         int
+	HasUploadCountLimit bool
+	MaxUploadCount      int
+	UploadCount         int
 
-	views []*ChallengeView
+	uploads []*ChallengeUpload
 }
 
-type ChallengeView struct {
+type ChallengeUpload struct {
 	Time time.Time
 	IP   string
 }
 
-func (challenge *Challenge) Views() []*ChallengeView {
+func (challenge *Challenge) Uploads() []*ChallengeUpload {
 	// todo: probably change with actual data storage
-	if challenge.views == nil {
-		return []*ChallengeView{}
+	if challenge.uploads == nil {
+		return []*ChallengeUpload{}
 	}
-	return challenge.views
+	return challenge.uploads
 }
 
 func (challenge *Challenge) CookieName() string {
@@ -51,13 +51,13 @@ func (challenge *Challenge) Expired() bool {
 	return time.Now().After(challenge.ValidUntil)
 }
 
-func (challenge *Challenge) HitMaxViewCount() bool {
-	return challenge.HasViewCountLimit && challenge.ViewCount >= challenge.MaxViewCount
+func (challenge *Challenge) HitMaxUploadCount() bool {
+	return challenge.HasUploadCountLimit && challenge.UploadCount >= challenge.MaxUploadCount
 }
 
-func (challenge *Challenge) SetMaxViewCount(maxViewCount int) {
-	challenge.HasViewCountLimit = true
-	challenge.MaxViewCount = maxViewCount
+func (challenge *Challenge) SetMaxUploadCount(maxUploadCount int) {
+	challenge.HasUploadCountLimit = true
+	challenge.MaxUploadCount = maxUploadCount
 }
 
 func (challenge *Challenge) SetExpirationDate(date time.Time) {
@@ -95,7 +95,7 @@ func (challenge *Challenge) Accessible(r *http.Request) bool {
 		return false
 	}
 
-	if challenge.HitMaxViewCount() {
+	if challenge.HitMaxUploadCount() {
 		return false
 	}
 
@@ -119,7 +119,7 @@ type ChallengeRepository interface {
 	Get(ID string) *Challenge
 	Set(challenge *Challenge)
 	Remove(challenge *Challenge)
-	ReportChallengeView(challenge *Challenge, filePath string, request *http.Request)
+	ReportChallengeUpload(challenge *Challenge, filePath string, request *http.Request)
 }
 
 type ArrayChallengeRepository struct {
@@ -169,16 +169,16 @@ func (repo *ArrayChallengeRepository) Remove(challenge *Challenge) {
 	}
 }
 
-func (repo *ArrayChallengeRepository) ReportChallengeView(challenge *Challenge, filePath string, request *http.Request) {
-	if challenge.views == nil {
-		challenge.views = []*ChallengeView{}
+func (repo *ArrayChallengeRepository) ReportChallengeUpload(challenge *Challenge, filePath string, request *http.Request) {
+	if challenge.uploads == nil {
+		challenge.uploads = []*ChallengeUpload{}
 	}
 
-	challenge.views = append(challenge.views, &ChallengeView{
+	challenge.uploads = append(challenge.uploads, &ChallengeUpload{
 		Time: time.Now(),
 		IP:   request.RemoteAddr,
 	})
-	challenge.ViewCount = len(challenge.views)
+	challenge.UploadCount = len(challenge.uploads)
 	repo.Set(challenge)
 }
 
