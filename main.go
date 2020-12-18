@@ -412,6 +412,8 @@ func handleChallengeUpload(w http.ResponseWriter, r *http.Request, ps httprouter
 		return
 	}
 
+	challengeRepository.ReportChallengeUpload(challenge, filePath, r)
+
 	writeMessagePage(w, &templates.MessagePage{
 		Status: http.StatusOK,
 		Text:   "File uploaded!",
